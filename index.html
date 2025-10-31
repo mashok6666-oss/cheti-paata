@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chitti Patta — Lucky Draw</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at 50% 20%, #182848, #0b1220 80%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 { font-size: 28px; margin-bottom: 10px; }
+    textarea, input, button {
+      margin: 6px 0;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #314;
+      background: #0c1730;
+      color: #fff;
+      width: 100%;
+      max-width: 400px;
+    }
+    button { cursor: pointer; background: #1e90ff; border: none; }
+    canvas {
+      margin-top: 20px;
+      border: 10px solid #2b2b2b;
+      border-radius: 50%;
+      background: #0c1730;
+    }
+    #winner {
+      font-size: 24px;
+      margin-top: 20px;
+      color: #ffeb3b;
+      text-shadow: 0 0 10px #ffc107, 0 0 20px #ffeb3b;
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes glow {
+      from { text-shadow: 0 0 10px #ffc107; }
+      to { text-shadow: 0 0 20px #ffeb3b, 0 0 30px #ffeb3b; }
+    }
+    #confettiCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+      z-index: 999;
+    }
+    table {
+      margin-top: 20px;
+      border-collapse: collapse;
+      width: 90%;
+      max-width: 600px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 8px;
+      border-bottom: 1px solid #223;
+      text-align: left;
+    }
+    th {
+      background: #0f1d38;
+      position: sticky;
+      top: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chitti Patta — Lucky Draw</h1>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; width: 100%; max-width: 1200px;">
+    <!-- Left Panel -->
+    <div>
+      <textarea id="names" rows="10">JYOTI
+PADMINI
+SAGAR
+KEJIYA
+ANUSHA
+PRASANTH
+NATHANIEL
+HEPPSI
+SIRISHA
+ASHOK</textarea>
+      <input type="month" id="drawMonth" />
+      <input type="number" id="amount" placeholder="Monthly amount (₹)" value="20000" />
+      <button onclick="applyNames()">Apply Names</button>
+      <button onclick="startCountdown()">Start Spin Countdown</button>
+      <button onclick="startNewCycle()">Start New Cycle</button>
+      <button onclick="exportHistory()">Export History</button>
+      <div id="countdown" style="font-size: 20px; font-weight: bold; margin-top: 10px;"></div>
+      <input type="file" id="importFile" accept=".json" style="margin-top: 10px;" onchange="importHistory(event)" />
+      <label><input type="checkbox" id="sound" checked /> Sound</label>
+      <label><input type="checkbox" id="confetti" checked /> Confetti</label>
+    </div>
+
+    <!-- Center Panel -->
+    <div style="text-align: center;">
+      <canvas id="wheel" width="400" height="400"></canvas>
+      <div id="winner"></div>
+    </div>
+
+    <!-- Right Panel -->
+    <div>
+      <h3>Winner History</h3>
+      <table id="historyTable">
+        <thead>
+          <tr><th>Date</th><th>Time</th><th>Name</th><th>Month</th><th>Amount</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <canvas id="confettiCanvas"></canvas>
+<div id="confettiWinner" style="
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: bold;
+  color: #ffeb3b;
+  text-shadow: 0 0 10px #ffc107, 0 0 20px #ffeb3b;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1000;
+  transition: opacity 0.5s ease;
+"></div>
+  <script>
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const TWO_PI = Math.PI * 2;
+    let names = [];
+    let drawn = [];
+    let history = [];
+    let spinning = false;
+    let lastAngle = 0;
+
+    function applyNames() {
+      const raw = document.getElementById('names').value;
+      names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      drawn = [];
+      lastAngle = 0;
+      drawWheel();
+      document.getElementById('winner').textContent = '';
+      updateHistory();
+    }
+     function startNewCycle() {
+     drawn = [];
+     lastAngle = 0;
+     document.getElementById('winner').textContent = '';
+     drawWheel();
+     }
+    function drawWheel() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (names.length < 2) return;
+      const remaining = names.filter((_, i) => !drawn.includes(i));
+      const arc = TWO_PI / remaining.length;
+      const r = canvas.width / 2 - 10;
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(lastAngle);
+      remaining.forEach((name, i) => {
+        const a0 = i * arc;
+        const a1 = a0 + arc;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, r, a0, a1);
+        ctx.closePath();
+        ctx.fillStyle = `hsl(${i * 360 / remaining.length}, 70%, 50%)`;
+        ctx.fill();
+        ctx.save();
+        ctx.rotate(a0 + arc / 2);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText(name, r - 20, 6);
+        ctx.restore();
+      });
+      ctx.restore();
+    }
+function startCountdown() {
+  let seconds = 30;
+  const countdownDiv = document.getElementById('countdown');
+  countdownDiv.textContent = `Spin starts in ${seconds}s`;
+
+  const interval = setInterval(() => {
+    seconds--;
+    countdownDiv.textContent = `Spin starts in ${seconds}s`;
+
+    if (seconds <= 0) {
+      clearInterval(interval);
+      countdownDiv.textContent = '';
+      spin();
+    }
+  }, 1000);
+}
+    function spin() {
+      if (spinning || names.length < 2) return;
+      const remaining = names.filter((_, i) => !drawn.includes(i));
+      if (remaining.length === 0) {
+        alert('All members have won. Start a new cycle.');
+        return;
+      }
+      spinning = true;
+      const arc = TWO_PI / remaining.length;
+      const winnerIndex = Math.floor(Math.random() * remaining.length);
+      const targetAngle = TWO_PI * 10 + (TWO_PI - (winnerIndex + 0.5) * arc);
+      const start = lastAngle;
+      const end = start + targetAngle;
+      const duration = 4000;
+      const startTime = performance.now();
+
+      if (document.getElementById('sound').checked) {
+        const audio = new Audio("https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg");
+        audio.play();
+      }
+
+      function animate(t) {
+        const progress = Math.min(1, (t - startTime) / duration);
+        lastAngle = start + (end - start) * (1 - Math.pow(1 - progress, 3));
+        drawWheel();
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          finalizeWinner(winnerIndex);
+          spinning = false;
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+       function exportHistory() {
+       const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
+       const a = document.createElement('a');
+       a.href = URL.createObjectURL(blob);
+       a.download = 'chitti_patta_history.json';
+       document.body.appendChild(a);
+       a.click();
+       setTimeout(() => {
+       URL.revokeObjectURL(a.href);
+       a.remove();
+       }, 0);
+      }
+       function importHistory(event) {
+       const file = event.target.files[0];
+       if (!file) return;
+
+       const reader = new FileReader();
+       reader.onload = function(e) {
+       try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        history = data;
+        updateHistory();
+        alert('History imported successfully!');
+      } else {
+        alert('Invalid file format.');
+      }
+    } catch (err) {
+      alert('Error reading file: ' + err.message);
+    }
+      };
+       reader.readAsText(file);
+       }
+    
+      function finalizeWinner(index) {
+      const remaining = names.filter((_, i) => !drawn.includes(i));
+      const winnerName = remaining[index];
+      const originalIndex = names.indexOf(winnerName);
+      drawn.push(originalIndex);
+      const winnerDiv = document.getElementById('winner');
+      winnerDiv.textContent = `🏆 Winner: ${winnerName}`;
+      winnerDiv.style.animation = 'none';
+      void winnerDiv.offsetWidth; // restart animation
+      winnerDiv.style.animation = 'glow 2s ease-in-out infinite alternate';
+
+      const month = document.getElementById('drawMonth').value || new Date().toISOString().slice(0, 7);
+      const amount = Number(document.getElementById('amount').value || 20000);
+      history.unshift({ name: winnerName, month, amount, ts: Date.now() });
+      updateHistory();
+
+      if (document.getElementById('confetti').checked) launchConfetti(winnerName);
+    }
+
+   function updateHistory() {
+  const tbody = document.querySelector('#historyTable tbody');
+  tbody.innerHTML = history.map(h => {
+    const d = new Date(h.ts);
+    const dateStr = d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' });
+    const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<tr>
+      <td>${dateStr}</td>
+      <td>${timeStr}</td>
+      <td>${h.name}</td>
+      <td>${h.month}</td>
+      <td>₹${h.amount.toLocaleString('en-IN')}</td>
+    </tr>`;
+  }).join('');
+}
+
+    function launchConfetti(winnerName) {
+  const cvs = document.getElementById('confettiCanvas');
+  const cc = cvs.getContext('2d');
+  cvs.style.display = 'block';
+  cvs.width = window.innerWidth;
+  cvs.height = window.innerHeight;
+
+  const display = document.getElementById('confettiWinner');
+  display.textContent = `🏆 ${winnerName} 🏆`;
+  display.style.opacity = '1';
+
+  const colors = ['#4f46e5','#0ea5e9','#22c55e','#eab308','#ef4444','#a855f7','#06b6d4','#84cc16','#f97316','#ec4899'];
+  const parts = Array.from({ length: 200 }, () => ({
+    x: Math.random() * cvs.width,
+    y: -20 - Math.random() * cvs.height * 0.5,
+    r: 2 + Math.random() * 4,
+    s: 2 + Math.random() * 3,
+    a: Math.random() * Math.PI * 2,
+    c: colors[Math.floor(Math.random() * colors.length)]
+  }));
+
+  const t0 = performance.now(), dur = 1800;
+
+  const draw = t => {
+    const p = Math.min(1, (t - t0) / dur);
+    cc.clearRect(0, 0, cvs.width, cvs.height);
+    parts.forEach(pt => {
+      pt.y += pt.s;
+      pt.x += Math.sin(pt.a += 0.05) * 1.2;
+      cc.fillStyle = pt.c;
+      cc.beginPath();
+      cc.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+      cc.fill();
+    });
+    if (p < 1) requestAnimationFrame(draw);
+    else {
+      cvs.style.display = 'none';
+      display.style.opacity = '0';
+    }
+  };
+
+  requestAnimationFrame(draw);
+}
+
+    // Initialize with default names
+    applyNames();
+  </script>
+
+</html>
