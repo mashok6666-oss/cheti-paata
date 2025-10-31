@@ -1,2 +1,2 @@
-# chitti-patta
+# cheti-paata
 lucky draw app for groups — spin the wheel, celebrate winners, and track history with confetti, sound, and export features.
